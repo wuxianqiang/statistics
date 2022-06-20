@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { ElHeader, ElMain, ElFooter, ElContainer } from 'element-plus'
+import MenuList from './components/MenuList.vue';
 </script>
 
 <template>
   <div class="common-layout">
     <el-container>
-      <el-header height="66px">
-        <nav class="nav-menu">
-          <RouterLink to="/">数据</RouterLink>
-          <RouterLink to="/about">导出</RouterLink>
-        </nav>
-      </el-header>
-      <el-main>
-        <RouterView />
-      </el-main>
-      <el-footer height="40px">Copyright 2022</el-footer>
+      <el-header>Header</el-header>
+      <el-container>
+        <el-aside width="240px">
+          <menu-list></menu-list>
+        </el-aside>
+        <el-main>
+          <router-view></router-view>
+        </el-main>
+      </el-container>
     </el-container>
   </div>
 </template>

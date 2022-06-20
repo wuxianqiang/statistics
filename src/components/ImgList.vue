@@ -37,7 +37,7 @@ const handleSave = () => {
 
 <template>
   <div>
-    <div>规则列表：</div>
+    <!-- <div>规则列表：</div> -->
     <div class="row">
       上班时间为
       <el-time-select
@@ -102,7 +102,7 @@ const handleSave = () => {
       <el-button type="primary" @click="handleSave">保存</el-button>
     </div>
     <el-divider />
-    <div class="title">计算规则：</div>
+    <div class="title">考勤规则：</div>
     <ul>
       <li>早上8点之前上班，上班时间记为8点</li>
       <li>早上8点之后上班，记为迟到时间，(如：08:02上班，则迟到2分钟)</li>
@@ -113,7 +113,7 @@ const handleSave = () => {
       <li>下午17-18点之间记为工作日加班时间</li>
       <li>下午19-21点之间记为工作日加班时间</li>
     </ul>
-    <div class="title">3个时间计算逻辑</div>
+    <!-- <div class="title">3个时间计算逻辑</div>
     <ul>
       <li>系统会删除中间的时间，保留第1个和第3个时间</li>
       <li>07:58  12:00 12:36，上班时间记为4小时，无加班</li>
@@ -125,7 +125,7 @@ const handleSave = () => {
       <li>07:58  12:00，上班时间记为4小时，无加班</li>
       <li>12:58  18:00，上班时间记为4小时，加班时间记为1小时</li>
       <li>07:58  18:00，上班时间记为8小时，加班时间记为1小时</li>
-    </ul>
+    </ul> -->
   </div>
 </template>
 
