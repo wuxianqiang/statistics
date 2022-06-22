@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx'
 
+const weekend = ['六', '日']
+
 let config = {
   workShiftStart: '08:00',
   workShiftEnd: '18:00',
@@ -32,7 +34,7 @@ export function putWorkbook(workbook: any) {
     const result = handleData(firstTableJson)
     return result
   }
-  return { result: [], keys: [], down: [] }
+  return { result: [], keys: [], down: [], statistics: [] }
 }
 
 function handleData (list: any) {
@@ -41,18 +43,41 @@ function handleData (list: any) {
   const keys = Object.keys(title)
   const down = []
   const result = []
+  const statistics = []
   for (let i = 2; i < list.length; i++) {
     const item = list[i] // {__EMPTY: 'key'}
     const temp: any = {}
-    const downValue = []
+    // const downValue = []
+    let totalWork = 0
+    let totalLazy = 0
+    let totalWorkAdd = 0
+    let totalWeekAdd = 0
+    let username = ''
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]
       const value = handleValue(item[key] || '')
       const current = i === 0 ? 'name' : key
       temp[current] = value
-      downValue.push(value.s)
+      if (i === 0) {
+        // 姓名
+        // downValue.push(value.s)
+        username = value.s
+      }
+      // downValue.push(value.s)
+      if (weekend.includes(keys[i])) {
+        // 周末加班(上班+加班)
+        totalWeekAdd += value.a + value.c
+      } else {
+        // 工作日加班
+        totalWorkAdd += value.c
+        totalWork += value.a
+      }
+      // 总迟到
+      totalLazy += Math.abs(value.b)
     }
-    down.push(downValue)
+    down.push([username, totalWork, totalWorkAdd, totalWeekAdd, totalLazy])
+    statistics.push({username, totalWork, totalWorkAdd, totalWeekAdd, totalLazy, id: i})
+    // down.push(downValue)
     result.push(temp)
   }
   const keyList = []
@@ -65,15 +90,48 @@ function handleData (list: any) {
     downTitle.push(temp.label)
     keyList.push(temp)
   }
-  down.unshift(downTitle)
-  return { result: result, keys: keyList, down }
+  // down.unshift(downTitle)
+  down.unshift(['姓名', '正班时间', '工作日加班时间', '双休日加班时间', '迟到时间'])
+  return { result: result, keys: keyList, down, statistics }
+}
+
+// 12-13点重复打卡
+function  removalLunch (list: string[]): string[] {
+  const idx = [] as string[]
+  list.forEach(item => {
+    const current = getTime(item).count
+    const min = getTime(config.lunchBreakStart).count
+    const max = getTime(config.lunchBreakEnd).count
+    if (current >= min && current <= max) {
+      idx.push(item)
+    }
+  })
+  const remove = idx.slice(2)
+  return list.filter(item => !remove.includes(item))
+}
+
+// 16-17点重复打卡
+function  removalWork (list: string[]): string[] {
+  const idx = [] as string[]
+  list.forEach(item => {
+    const current = getTime(item).count
+    const min = getTime(config.workShiftEnd).count
+    const max = getTime(config.overtimeStart).count
+    if (current >= min && current <= max) {
+      idx.push(item)
+    }
+  })
+  const remove = idx.slice(2)
+  return list.filter(item => !remove.includes(item))
 }
 
 function validateTime (list: string[]) {
-  if (list.length === 3) {
-    return [list[0], list[2]]
+  const filterA = removalLunch(list)
+  const filterB = removalWork(filterA)
+  if (filterB.length === 3) {
+    return [filterB[0], filterB[2]]
   }
-  return list
+  return filterB
   // 如果午休时间重复打卡，去掉重复的
 }
 
@@ -81,13 +139,12 @@ function handleValue (str: string) {
   const reg = /\d{2}:\d{2}/g
   const arr = validateTime(str.match(reg) || [])
   const temp = {
-    a: '',
-    b: '',
-    c: '',
-    d: '',
-    s: str,
-    o: str,
-    l: false
+    a: 0, // 上班时间
+    b: 0, // 迟到时间
+    c: 0, // 加班时间
+    s: str, // 显示的字符串
+    o: str, // 原理的字符串
+    l: false // 是否迟到
   }
   if (arr.length === 4) {
     const to8 = diff(config.workShiftStart, arr[0])
@@ -100,11 +157,15 @@ function handleValue (str: string) {
     const timer2 = handleAfternoon(arr[2], arr[3])
     const totalTime = time1.diff + timer2.diff
     //17点以后是加班是加班
-    temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
-    temp.b = getLazy(totalLazy)
-    temp.c = `加班时间：${Math.floor(timer2.add / 60)}小时${timer2.add % 60}分钟`
-    temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
+    temp.a = totalTime
+    temp.b = totalLazy
+    temp.c = timer2.add
+    // temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
+    // temp.b = getLazy(totalLazy)
+    // temp.c = `加班时间：${Math.floor(timer2.add / 60)}小时${timer2.add % 60}分钟`
+    // temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
     temp.l = totalLazy < 0
+    temp.s = formatTime(temp)
     return temp
   }
   if (arr.length === 2) {
@@ -120,11 +181,15 @@ function handleValue (str: string) {
       const time1 = handleMorning(arr[0], arr[1])
       const totalLazy = to8.lazyTime + to12.lazyTime
       const step = time1.diff
-      temp.a = `正班时间：${Math.floor(step / 60)}小时${step % 60}分钟`
-      temp.b = getLazy(totalLazy)
-      temp.c = `加班时间：0分钟`
-      temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
+      temp.a = step
+      temp.b = totalLazy
+      temp.c = 0
+      // temp.a = `正班时间：${Math.floor(step / 60)}小时${step % 60}分钟`
+      // temp.b = getLazy(totalLazy)
+      // temp.c = `加班时间：0分钟`
+      // temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
       temp.l = totalLazy < 0
+      temp.s = formatTime(temp)
       return temp
     }
     // 全天
@@ -135,11 +200,15 @@ function handleValue (str: string) {
       const time1 = handleDay(arr[0], arr[1])
       const totalLazy = to8.lazyTime + to17.lazyTime
       const totalTime = time1.diff
-      temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
-      temp.b = getLazy(totalLazy)
-      temp.c = `加班时间：${Math.floor(time1.add / 60)}小时${time1.add % 60}分钟`
-      temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
+      temp.a = totalTime
+      temp.b = totalLazy
+      temp.c = time1.add
+      // temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
+      // temp.b = getLazy(totalLazy)
+      // temp.c = `加班时间：${Math.floor(time1.add / 60)}小时${time1.add % 60}分钟`
+      // temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
       temp.l = totalLazy < 0
+      temp.s = formatTime(temp)
       return temp
     }
     // 下午
@@ -150,11 +219,15 @@ function handleValue (str: string) {
       const time1 = handleAfternoon(arr[0], arr[1])
       const totalLazy = to13.lazyTime + to17.lazyTime
       const step = time1.diff
-      temp.a = `正班时间：${Math.floor(step / 60)}小时${step % 60}分钟`
-      temp.b = getLazy(totalLazy)
-      temp.c = `加班时间：${time1.add}分钟`
-      temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
+      temp.a = step
+      temp.b = totalLazy
+      temp.c = time1.add
+      // temp.a = `正班时间：${Math.floor(step / 60)}小时${step % 60}分钟`
+      // temp.b = getLazy(totalLazy)
+      // temp.c = `加班时间：${time1.add}分钟`
+      // temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
       temp.l = totalLazy < 0
+      temp.s = formatTime(temp)
       return temp
     }
   }
@@ -171,11 +244,15 @@ function handleValue (str: string) {
     const totalTime = time1.diff + timer2.diff
     const add = timer2.add + time3.add
     //17点以后是加班是加班
-    temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
-    temp.b = getLazy(totalLazy)
-    temp.c = `加班时间：${Math.floor(add / 60)}小时${add % 60}分钟`
-    temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
+    temp.a = totalTime
+    temp.b = totalLazy
+    temp.c = add
+    // temp.a = `正班时间：${Math.floor(totalTime / 60)}小时${totalTime % 60}分钟`
+    // temp.b = getLazy(totalLazy)
+    // temp.c = `加班时间：${Math.floor(add / 60)}小时${add % 60}分钟`
+    // temp.s = `${temp.a}\r\n${temp.b}\r\n${temp.c}`
     temp.l = totalLazy < 0
+    temp.s = formatTime(temp)
     return temp
   }
   return temp
@@ -315,4 +392,12 @@ function getLazy (num: number) {
     return '上班情况：正常'
   }
   return `上班情况：迟到(${num}分钟)`
+}
+
+function formatTime (temp: { a: number, b: number, c: number }): string {
+  let str = ''
+  str += `\r\n正班时间：${Math.floor(temp.a / 60)}小时${temp.a % 60}分钟`
+  str += `\r\n迟到时间：${temp.b}分钟`
+  str += `\r\n加班时间：${Math.floor(temp.c / 60)}小时${temp.c % 60}分钟`
+  return str
 }
