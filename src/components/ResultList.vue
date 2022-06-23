@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from '@vue/reactivity';
-import { ElTable, ElTableColumn, ElAlert, ElUpload, ElButton, ElMessage, ElIcon, ElTabs, ElTabPane, ElDialog, ElCard, ElTimeline, ElTimelineItem } from 'element-plus'
+import { ElTable, ElTableColumn, ElAlert, ElUpload, ElButton, ElMessage, ElIcon, ElTabs, ElTabPane, ElDialog, ElCard, ElTimeline, ElTimelineItem, ElCalendar } from 'element-plus'
 import type { UploadInstance, UploadProps, UploadRawFile, UploadFile, TabsPaneContext } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { genFileId } from 'element-plus'
@@ -19,7 +19,8 @@ type State = {
   activeName: string,
   statistics: any[],
   userInfo: any,
-  dialogVisible: boolean
+  dialogVisible: boolean,
+  range: Date[]
 }
 
 const state = reactive<State>({
@@ -30,7 +31,8 @@ const state = reactive<State>({
   activeName: 'first',
   statistics: [],
   userInfo: {},
-  dialogVisible: false
+  dialogVisible: false,
+  range: [new Date(2019, 2, 4), new Date(2019, 2, 24)]
 })
 
 let downloadList: any = []
@@ -233,8 +235,10 @@ const options = [
             </el-table-column>
           </el-table>
         </el-tab-pane>
+        <!-- 起1，结0 -->
+        <!-- 0则表示星期日，若是1则表示星期一 -->
         <el-tab-pane label="报表看板" name="last">
-
+          <el-calendar :range="[new Date(2019, 2, 4), new Date(2019, 2, 24)]"></el-calendar>
         </el-tab-pane>
       </el-tabs>
     </div>
