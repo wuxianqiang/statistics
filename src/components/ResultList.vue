@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from '@vue/reactivity';
-import { ElTable, ElTableColumn, ElAlert, ElUpload, ElButton, ElMessage, ElIcon, ElTabs, ElTabPane, ElDialog, ElCard, ElTimeline, ElTimelineItem, ElCalendar } from 'element-plus'
-import type { UploadInstance, UploadProps, UploadRawFile, UploadFile, TabsPaneContext } from 'element-plus'
+import { ElTable, ElTableColumn, ElAlert, ElUpload, ElButton, ElMessage, ElIcon, ElTabs, ElTabPane, ElDialog, ElCard, ElTimeline, ElTimelineItem, ElTag } from 'element-plus'
+import type { UploadInstance, UploadProps, UploadRawFile, UploadFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { genFileId } from 'element-plus'
 import { reactive, ref, nextTick } from 'vue';
 import * as XLSX from 'xlsx'
 import { putWorkbook } from '../common/js/utils'
 import { download } from '../common/js/down'
-
-type Val = string | number
+import CalendarTable from './CalendarTable.vue';
+import type { Time } from '@/common/dataType'
 
 type State = {
   list: any[],
@@ -20,7 +20,12 @@ type State = {
   statistics: any[],
   userInfo: any,
   dialogVisible: boolean,
-  range: Date[]
+  range: Date[],
+  time: Time,
+  table: string,
+  result: any,
+  currentDay: any,
+  currentName: any
 }
 
 const state = reactive<State>({
@@ -32,7 +37,22 @@ const state = reactive<State>({
   statistics: [],
   userInfo: {},
   dialogVisible: false,
-  range: [new Date(2019, 2, 4), new Date(2019, 2, 24)]
+  range: [new Date(2019, 2, 4), new Date(2019, 2, 24)],
+  time: {
+    s: '',
+    y: 0,
+    m: 0,
+    d: 0
+  },
+  currentDay: [],
+  table: '',
+  currentName: [],
+  result: {
+    nameList: [],
+    dataList: [],
+    title: [],
+    time: {}
+  }
 })
 
 let downloadList: any = []
@@ -56,13 +76,19 @@ const handleUpload = async (uploadFile: UploadFile) => {
   })
   try {
     const table = await readWorkbookFromLocalFile(file)
-    const result = putWorkbook(table)
-    console.log(result)
-    state.keys = result.keys
-    state.list = result.result
-    downloadList = result.down
+    const result: any = putWorkbook(table)
+    // console.log(result)
+    // state.keys = result.keys
+    // state.list = result.result
+    // state.time = result.time
+    // state.table = result.table
+    downloadList = result.dataList.down
     // state.down = result.down
-    state.statistics = result.statistics
+    // state.statistics = result.statistics
+    console.log(result)
+    state.result = result
+    state.currentName = result.dataList.column[0]
+    state.currentDay = result.dataList.column[5]
     nextTick(() => {
       ElMessage({
         message: '计算完成',
@@ -70,6 +96,7 @@ const handleUpload = async (uploadFile: UploadFile) => {
       })
     })
   } catch (error) {
+    console.log(error)
     ElMessage({
       message: '上传失败，重新上传',
       type: 'error',
@@ -93,9 +120,9 @@ const handleChange = async (e: any) => {
   const file: File = e.target.files[0]
   const table = await readWorkbookFromLocalFile(file)
   const result = putWorkbook(table)
-  console.log(result)
-  state.list = result.result
-  state.keys = result.keys
+  // console.log(result)
+  // state.list = result.result
+  // state.keys = result.keys
 }
 
 const totalList = computed(() => {
@@ -120,8 +147,8 @@ const handleRefresh = () => {
 }
 
 const handleEdit = (index: number) => {
-  state.userInfo = state.list[index]
-  console.log(state.userInfo)
+  state.userInfo = state.result.dataList.row[index]
+  // console.log(state.userInfo)
   state.dialogVisible = true
 }
 
@@ -135,6 +162,11 @@ const options = [
     label: '迟到',
   }
 ]
+
+const handleSubmit = (p: { index: number }) => {
+  const column = state.result.dataList.column || []
+  state.currentDay = column[p.index + 5]
+}
 
 </script>
 
@@ -168,7 +200,7 @@ const options = [
       <el-tabs v-model="state.activeName" class="demo-tabs">
         <el-tab-pane label="统计看板" name="first">
           <el-button type="primary" @click="handleDown">点击下载</el-button>
-          <el-table :data="state.statistics" stripe style="width: 100%">
+          <el-table :data="state.result.dataList.total" stripe style="width: 100%">
             <el-table-column prop="username" label="姓名" />
             <el-table-column prop="totalWork" sortable label="正班时间" />
             <el-table-column prop="totalWorkAdd" sortable label="工作日加班时间" />
@@ -192,17 +224,18 @@ const options = [
             <el-card class="box-card">
               <template #header>
                 <div class="card-header">
-                  <span>{{state.userInfo['name'].s}}</span>
+                  <span>标题</span>
+                  <!-- <span>{{state.userInfo['name'].s}}</span> -->
                   <!-- <el-button class="button" text>Operation button</el-button> -->
                 </div>
               </template>
-              <div style="height: 400px; overflow: auto;">
+              <div style="height: 400px; overflow: auto; padding: 12px 0;">
                 <el-timeline>
-                  <el-timeline-item v-for="(item, index) in state.keys.slice(6)" :key="index">
+                  <el-timeline-item v-for="(item, index) in state.result.nameList" :key="index" :timestamp="item.label" placement="top">
                     <el-card>
-                      <h4>{{item.label}}</h4>
-                      <p>{{state.userInfo[item.name].o}}</p>
-                      <p>{{state.userInfo[item.name].s}}</p>
+                      <!-- <h4>{{item.label}}</h4> -->
+                      <p>{{state.userInfo[index].__origin}}</p>
+                      <!-- <p>{{state.userInfo[index].__origin}}</p> -->
                     </el-card>
                   </el-timeline-item>
                 </el-timeline>
@@ -225,7 +258,7 @@ const options = [
         </el-dialog>
         <el-tab-pane label="数据看板" name="second">
           <el-alert :title="totalList" type="warning" :show-icon="true" :closable="false" />
-          <el-table :data="state.list" stripe style="width: 100%">
+          <!-- <el-table :data="state.list" stripe style="width: 100%">
             <el-table-column v-for="item in state.keys" :key="item.name" :prop="item.name" :label="item.label" width="220">
               <template #default="scope">
                 <div style="display: flex; align-items: center">
@@ -233,12 +266,67 @@ const options = [
                 </div>
               </template>
             </el-table-column>
-          </el-table>
+          </el-table> -->
+          <div class="wrap">
+            <table class="table" cellpadding="10">
+              <thead class="thead">
+                <tr class="tr">
+                  <th class="th" v-for="(item, index) in state.result.nameList" :key="index">
+                    {{item.label}}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="tr" v-for="(row, index) in state.result.dataList.row" :key="index">
+                  <td class="td" v-for="(col, index) in row" :key="index" :class="{red: col.work && col.work.l}">
+                    {{col.__origin}}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- <div v-html="state.table"></div> -->
         </el-tab-pane>
         <!-- 起1，结0 -->
         <!-- 0则表示星期日，若是1则表示星期一 -->
         <el-tab-pane label="报表看板" name="last">
-          <el-calendar :range="[new Date(2019, 2, 4), new Date(2019, 2, 24)]"></el-calendar>
+          <div class="calendar">
+            <calendar-table @submit="handleSubmit" :time="state.result.time.timeWeek"></calendar-table>
+            <!-- <el-calendar :range="[new Date(2019, 2, 4), new Date(2019, 2, 24)]"></el-calendar> -->
+            <ul class="list">
+              <li class="item" v-for="(item, index) in state.currentDay" :key="index">
+                <el-card class="box-card">
+                  <template #header>
+                    <div class="card-header">
+                      <span>上班情况</span>
+                      <!-- <el-button class="button" text>Operation button</el-button> -->
+                      <div>
+                        <el-tag v-if="item.work && item.work.s && item.work.l" class="ml-2" type="danger">
+                          迟到
+                        </el-tag>
+                        <el-tag v-if="item.work && !item.work.s && item.work.o" type="warning">
+                          人工审核
+                        </el-tag>
+                         <el-tag v-if="item.work && item.work.s && !item.work.l" class="ml-2" type="success">
+                          正常
+                        </el-tag>
+                      </div>
+                    </div>
+                  </template>
+                  <div>
+                    <span>{{state.currentName[index].__origin}}：</span>
+                    <span>
+                      {{item.__origin}}
+                    </span>
+                    <p :class="{red: item.work.l}" v-if="item.work">
+                      {{item.work.s}}
+                    </p>
+                  </div>
+                </el-card>
+              </li>
+            </ul>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -246,6 +334,15 @@ const options = [
 </template>
 
 <style scoped>
+.list {
+  list-style: none;
+  line-height: 36px;
+  overflow: auto;
+  max-height: 600px;
+  padding: 20px;
+  margin-left: 60px;
+  min-width: 600px;
+}
 .el-alert {
   margin: 20px 0 0;
 }
@@ -254,5 +351,72 @@ const options = [
 }
 .active {
   color: red;
+}
+
+.td {
+  border-bottom: 1px solid #dcdfe6;
+  border-right: 1px solid #dcdfe6;
+}
+.th {
+  border-bottom: 1px solid #dcdfe6;
+  border-right: 1px solid #dcdfe6;
+  border-top: 1px solid #dcdfe6;
+  background: #f5f7fa;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f5f7fa;
+}
+
+.th:first-child {
+  border-left: 1px solid #dcdfe6;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  background: #f5f7fa;
+}
+
+.td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f5f7fa;
+  border-left: 1px solid #dcdfe6;
+}
+
+.table {
+  border-spacing: 0;
+  overflow: auto;
+  table-layout: fixed;
+  border-collapse: separate;
+  white-space: nowrap;
+  text-align: left;
+}
+.wrap {
+  margin-top: 20px;
+  width: 100%;
+  overflow: auto;
+  max-height: 600px;
+}
+.tr:hover {
+  background: #ecf5ff;
+}
+
+.calendar {
+  display: flex;
+}
+
+.red {
+  color: #F73131;
+}
+
+.item {
+  margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 </style>

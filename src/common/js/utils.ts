@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx'
+import { getCalendar } from './calendar'
+import type { Work, Time } from '../dataType'
 
 const weekend = ['六', '日']
 
@@ -25,20 +27,157 @@ export function setConfig (cfg: ConfigKey) {
 }
 
 export function putWorkbook(workbook: any) {
-  console.log(config, 'config')
+  // console.log(config, 'config')
   // 默认选择了第一张表格
   const name: string = Object.keys(workbook.Sheets)[0]
   if (name) {
     const firstTable = workbook.Sheets[name]
     const firstTableJson = XLSX.utils.sheet_to_json(firstTable)
     const result = handleData(firstTableJson)
-    return result
+    const tableList: string[][] = XLSX.utils.sheet_to_json(firstTable, { header: 1})
+    const info = handleTableList(tableList)
+    // console.log(info, 'info')
+    // return { ...result, table: '' }
+    return info
   }
-  return { result: [], keys: [], down: [], statistics: [] }
+  return {}
+}
+
+function handleTableTitle (title: string) {
+  const reg = /(\d{4})-(\d{2})-(\d{2})/g
+  const time = {
+    s: '',
+    y: 0,
+    m: 0,
+    d: 0
+  }
+  const matchInfo = reg.exec(title) || []
+  time.s = matchInfo[0] || ''
+  time.y = +matchInfo[1] || 0
+  time.m = +matchInfo[2] || 0
+  time.d = +matchInfo[3] || 0
+  return time
+}
+
+function handleTableName (list: string[]) {
+  const result = []
+  for (let i = 0; i < list.length; i++) {
+    result.push({
+      label: list[i]
+    })
+  }
+  return result
+}
+
+function handleTableData (list: string[][], count: number, timeList: any) {
+  const row = []
+  const total = []
+  const down: any = [['姓名', '正班时间', '工作日加班时间', '双休日加班时间', '迟到时间']]
+  for (let i = 3; i < list.length; i++) {
+    const current = list[i]
+    if (current.length > 0) {
+      // 处理每一行
+      const target = []
+      let totalWork = 0
+      let totalLazy = 0
+      let totalWorkAdd = 0
+      let totalWeekAdd = 0
+      let username = ''
+      for (let k = 0; k < count; k++) {
+        const item = current[k]
+        if (k === 0) {
+          username = item
+        }
+        if (k > 5) {
+          const value = handleValue(item || '')
+          const t = timeList[k - 6] || null
+          target.push({
+            work: value,
+            time: t,
+            __origin: item || ''
+          })
+          if (t && t.isWork) {
+            totalWorkAdd += value.c
+            totalWork += value.a
+          } else {
+            totalWeekAdd += value.a + value.c
+          }
+          totalLazy += Math.abs(value.b)
+        } else {
+          target.push({
+            __origin: item || ''
+          })
+        }
+      }
+      down.push([username, totalWork, totalWorkAdd, totalWeekAdd, totalLazy])
+      total.push({
+        totalWork, totalLazy, totalWorkAdd, totalWeekAdd, username
+      })
+      row.push(target)
+    }
+  }
+
+  const column = []
+  let totalDayInfo = []
+  for (let m = 0; m < count; m++) {
+    const target = []
+    let totalLazy = 0
+    for (let n = 0; n < row.length; n++) {
+      const value = row[n][m]
+      target.push(value)
+      if (value.time && value.work) {
+        if (value.work.l) {
+          totalLazy++
+        }
+      }
+    }
+    totalDayInfo.push({ totalLazy })
+    column.push(target)
+  }
+  totalDayInfo = totalDayInfo.slice(6)
+  console.log(totalDayInfo)
+  for (let i = 0; i < timeList.length; i++) {
+    timeList[i].total = totalDayInfo[i] || {}
+  }
+  return { row, column, total, down }
+}
+
+function handleTableList (list: string[][]) {
+  const title = list[0][0] // 标题
+  const time = handleTableTitle(title)
+  const { timeWeek, timeList } = getCalendar(time)
+  const tableName = list[2] // 表头
+  const nameList = handleTableName(tableName)
+  const dataList = handleTableData(list, tableName.length, timeList)
+  return {
+    nameList,
+    dataList,
+    title,
+    time: {
+      time,
+      timeWeek,
+      timeList
+    }
+  }
 }
 
 function handleData (list: any) {
   // 注意上传的表格格式 前面1行是标题
+  // console.log(list, '===>')
+
+  const reg = /(\d{4})-(\d{2})-(\d{2})/g
+  const time = {
+    s: '',
+    y: 0,
+    m: 0,
+    d: 0
+  }
+  const firstTitle = Object.keys(list[0])[0]
+  const matchInfo: any = reg.exec(firstTitle) || []
+  time.s = matchInfo[0] || '';
+  time.y = +matchInfo[1] || 0;
+  time.m = +matchInfo[2] || 0;
+  time.d = +matchInfo[3] || 0;
   const title = list[1]
   const keys = Object.keys(title)
   const down = []
@@ -92,7 +231,7 @@ function handleData (list: any) {
   }
   // down.unshift(downTitle)
   down.unshift(['姓名', '正班时间', '工作日加班时间', '双休日加班时间', '迟到时间'])
-  return { result: result, keys: keyList, down, statistics }
+  return { result: result, keys: keyList, down, statistics, time }
 }
 
 // 12-13点重复打卡
@@ -142,7 +281,7 @@ function handleValue (str: string) {
     a: 0, // 上班时间
     b: 0, // 迟到时间
     c: 0, // 加班时间
-    s: str, // 显示的字符串
+    s: '', // 显示的字符串
     o: str, // 原理的字符串
     l: false // 是否迟到
   }
@@ -396,8 +535,8 @@ function getLazy (num: number) {
 
 function formatTime (temp: { a: number, b: number, c: number }): string {
   let str = ''
-  str += `\r\n正班时间：${Math.floor(temp.a / 60)}小时${temp.a % 60}分钟`
-  str += `\r\n迟到时间：${temp.b}分钟`
-  str += `\r\n加班时间：${Math.floor(temp.c / 60)}小时${temp.c % 60}分钟`
+  str += `正班时间：${Math.floor(temp.a / 60)}小时${temp.a % 60}分钟`
+  str += `，迟到时间：${temp.b}分钟`
+  str += `，加班时间：${Math.floor(temp.c / 60)}小时${temp.c % 60}分钟`
   return str
 }
