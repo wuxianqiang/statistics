@@ -4,12 +4,15 @@ import { ElTable, ElTableColumn, ElAlert, ElUpload, ElButton, ElMessage, ElIcon,
 import type { UploadInstance, UploadProps, UploadRawFile, UploadFile } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { genFileId } from 'element-plus'
-import { reactive, ref, nextTick } from 'vue';
+import { reactive, ref, nextTick, watch } from 'vue';
 import * as XLSX from 'xlsx'
 import { putWorkbook } from '../common/js/utils'
 import { download } from '../common/js/down'
 import CalendarTable from './CalendarTable.vue';
 import type { Time } from '@/common/dataType'
+import { useCounterStore } from '@/stores/counter'
+
+const counter = useCounterStore()
 
 type State = {
   list: any[],
@@ -66,6 +69,12 @@ const handleExceed: UploadProps['onExceed'] = (files) => {
   upload.value?.handleStart(file)
 }
 
+watch(() => {
+  return counter.counter
+}, () => {
+  state.isUpload = false
+})
+
 const handleUpload = async (uploadFile: UploadFile) => {
   const file = uploadFile.raw
   if (!file) return
@@ -88,7 +97,8 @@ const handleUpload = async (uploadFile: UploadFile) => {
     console.log(result)
     state.result = result
     state.currentName = result.dataList.column[0]
-    state.currentDay = result.dataList.column[5]
+    state.currentDay = result.dataList.column[6]
+    counter.setTitle(result.title)
     nextTick(() => {
       ElMessage({
         message: '计算完成',
@@ -219,34 +229,58 @@ const handleSubmit = (p: { index: number }) => {
         <el-dialog
           v-model="state.dialogVisible"
           title="考勤详情"
-          width="60%"
+          width="700px"
         >
-            <el-card class="box-card">
-              <template #header>
-                <div class="card-header">
-                  <span>标题</span>
-                  <!-- <span>{{state.userInfo['name'].s}}</span> -->
-                  <!-- <el-button class="button" text>Operation button</el-button> -->
-                </div>
-              </template>
-              <div style="height: 400px; overflow: auto; padding: 12px 0;">
-                <el-timeline>
-                  <el-timeline-item v-for="(item, index) in state.result.nameList" :key="index" :timestamp="item.label" placement="top">
-                    <el-card>
-                      <!-- <h4>{{item.label}}</h4> -->
-                      <p>{{state.userInfo[index].__origin}}</p>
-                      <!-- <p>{{state.userInfo[index].__origin}}</p> -->
-                    </el-card>
-                  </el-timeline-item>
-                </el-timeline>
-                <!-- <ul style="white-space: nowrap;">
-                  <li style="display: inline-block; width: 200px;" v-for="(item, index) in state.userInfo" :key="index">
-                    <div>{{item.s}}</div>
-                    <div>{{item.o}}</div>
-                  </li>
-                </ul> -->
-              </div>
-            </el-card>
+          <template #header>
+            <div class="card-header">
+              <span>考勤详情</span>
+              <!-- <span>{{state.userInfo['name'].s}}</span> -->
+              <!-- <el-button class="button" text>Operation button</el-button> -->
+            </div>
+          </template>
+          <div style="height: 400px; overflow: auto; padding: 12px 0;">
+            <el-timeline>
+              <el-timeline-item v-for="(item, index) in state.result.nameList" :key="index" placement="top">
+                <!-- <h4>{{item.label}}</h4> -->
+                <!-- <p>{{state.userInfo[index].__origin}}</p> -->
+                <!-- <p>{{state.userInfo[index].__origin}}</p> -->
+                <el-card class="box-card">
+                  <template #header>
+                    <div class="card-header">
+                      <span>{{item.label}}</span>
+                      <!-- <el-button class="button" text>Operation button</el-button> -->
+                      <div>
+                        <el-tag v-if="state.userInfo[index].work && state.userInfo[index].work.s && state.userInfo[index].work.l" class="ml-2" type="danger">
+                          迟到
+                        </el-tag>
+                        <el-tag v-if="state.userInfo[index].work && !state.userInfo[index].work.s && state.userInfo[index].work.o" type="warning">
+                          人工审核
+                        </el-tag>
+                        <el-tag v-if="state.userInfo[index].work && state.userInfo[index].work.s && !state.userInfo[index].work.l" class="ml-2" type="success">
+                          正常
+                        </el-tag>
+                      </div>
+                    </div>
+                  </template>
+                  <div>
+                    <!-- <span>{{state.currentName[index].__origin}}：</span> -->
+                    <span>
+                      {{state.userInfo[index].__origin}}
+                    </span>
+                    <p :class="{red: state.userInfo[index].work.l}" v-if="state.userInfo[index].work">
+                      {{state.userInfo[index].work.s}}
+                    </p>
+                  </div>
+                </el-card>
+              </el-timeline-item>
+            </el-timeline>
+            <!-- <ul style="white-space: nowrap;">
+              <li style="display: inline-block; width: 200px;" v-for="(item, index) in state.userInfo" :key="index">
+                <div>{{item.s}}</div>
+                <div>{{item.o}}</div>
+              </li>
+            </ul> -->
+          </div>
           <template #footer>
             <span class="dialog-footer">
               <el-button @click="state.dialogVisible = false">Cancel</el-button>

@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
-import { ElHeader, ElMain, ElFooter, ElContainer } from 'element-plus'
+import { ElHeader, ElMain, ElFooter, ElContainer, ElButton } from 'element-plus'
 import MenuList from './components/MenuList.vue';
+import { useCounterStore } from '@/stores/counter'
+
+const store = useCounterStore()
+
+const handleClick = () => {
+  store.increment()
+  store.setTitle('')
+}
 </script>
 
 <template>
   <div class="common-layout">
     <el-container>
-      <el-header>Header</el-header>
+      <el-header>
+        <div class="title">
+          {{store.title}}
+        </div>
+        <el-button @click="handleClick">重新上传</el-button>
+      </el-header>
       <el-container>
         <el-aside width="240px">
           <menu-list></menu-list>
@@ -55,6 +68,13 @@ a,
 
 .common-layout, .el-container {
   height: 100%;
+}
+
+.el-header {
+  display: flex;
+  align-items: center;
+  color: #fff;
+  justify-content: space-between;
 }
 
 .el-header, .el-footer {
